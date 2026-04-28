@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-async function requireTeamMember() {
+async function requireAdmin() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -13,15 +13,16 @@ async function requireTeamMember() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("user_id")
+    .select("user_id, is_admin")
     .eq("user_id", user.id)
     .single();
   if (!profile) throw new Error("Not a team member");
+  if (!profile.is_admin) throw new Error("Admin only");
   return user;
 }
 
 export async function inviteMember(email: string) {
-  await requireTeamMember();
+  await requireAdmin();
   const cleaned = email.trim().toLowerCase();
   if (!cleaned || !cleaned.includes("@")) {
     return { error: "Invalid email" };
@@ -50,7 +51,7 @@ export async function inviteMember(email: string) {
 }
 
 export async function removeMember(email: string) {
-  await requireTeamMember();
+  await requireAdmin();
   const cleaned = email.trim().toLowerCase();
   const admin = createAdminClient();
 

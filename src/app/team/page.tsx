@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { TeamForm } from "./team-form";
 
 type AllowedEmail = { email: string; added_at: string };
-type Profile = { user_id: string; email: string };
+type Profile = { user_id: string; email: string; is_admin: boolean };
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -21,9 +21,13 @@ export default async function TeamPage() {
 
   const { data: profilesRaw } = await admin
     .from("profiles")
-    .select("user_id, email");
+    .select("user_id, email, is_admin");
   const profiles = (profilesRaw ?? []) as Profile[];
   const activeEmails = new Set(profiles.map((p) => p.email));
+  const adminEmails = new Set(profiles.filter((p) => p.is_admin).map((p) => p.email));
+  const currentIsAdmin = profiles.some(
+    (p) => p.user_id === user?.id && p.is_admin
+  );
 
   return (
     <div className="min-h-screen">
@@ -44,13 +48,22 @@ export default async function TeamPage() {
       </header>
 
       <main className="max-w-2xl mx-auto p-6 space-y-8">
-        <section>
-          <h2 className="text-sm font-semibold mb-2">Invite a teammate</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-            They&apos;ll get an email to set a password and join the dashboard.
-          </p>
-          <TeamForm />
-        </section>
+        {currentIsAdmin ? (
+          <section>
+            <h2 className="text-sm font-semibold mb-2">Invite a teammate</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+              They&apos;ll get an email to set a password and join the dashboard.
+            </p>
+            <TeamForm />
+          </section>
+        ) : (
+          <section>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              You&apos;re a team member. Only admins can invite or remove
+              members.
+            </p>
+          </section>
+        )}
 
         <section>
           <h2 className="text-sm font-semibold mb-3">Members</h2>
@@ -63,6 +76,7 @@ export default async function TeamPage() {
             {allowed.map((row) => {
               const active = activeEmails.has(row.email);
               const isYou = row.email === user?.email;
+              const isAdmin = adminEmails.has(row.email);
               return (
                 <li
                   key={row.email}
@@ -75,6 +89,11 @@ export default async function TeamPage() {
                         you
                       </span>
                     )}
+                    {isAdmin && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                        admin
+                      </span>
+                    )}
                     <span
                       className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
                         active
@@ -85,7 +104,7 @@ export default async function TeamPage() {
                       {active ? "active" : "invited"}
                     </span>
                   </div>
-                  {!isYou && <RemoveButton email={row.email} />}
+                  {currentIsAdmin && !isYou && <RemoveButton email={row.email} />}
                 </li>
               );
             })}
