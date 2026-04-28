@@ -78,6 +78,48 @@ export async function removeMember(email: string) {
   return { ok: true };
 }
 
+export async function uploadAvatar(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected" };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "Image must be under 5MB" };
+  }
+  if (!file.type.startsWith("image/")) {
+    return { error: "File must be an image" };
+  }
+
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `${user.id}/avatar.${ext}`;
+
+  const admin = createAdminClient();
+  const { error: uploadError } = await admin.storage
+    .from("avatars")
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (uploadError) return { error: uploadError.message };
+
+  const {
+    data: { publicUrl },
+  } = admin.storage.from("avatars").getPublicUrl(path);
+  const url = `${publicUrl}?v=${Date.now()}`;
+
+  const { error: updateError } = await admin
+    .from("profiles")
+    .update({ avatar_url: url })
+    .eq("user_id", user.id);
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true, url };
+}
+
 export async function setPassword(newPassword: string) {
   if (!newPassword || newPassword.length < 8) {
     return { error: "Password must be at least 8 characters" };

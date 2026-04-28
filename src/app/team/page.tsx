@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { UserMenu } from "@/components/user-menu";
 import { TeamForm } from "./team-form";
 
 type AllowedEmail = { email: string; added_at: string };
-type Profile = { user_id: string; email: string; is_admin: boolean };
+type Profile = {
+  user_id: string;
+  email: string;
+  is_admin: boolean;
+  avatar_url: string | null;
+};
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -21,13 +27,16 @@ export default async function TeamPage() {
 
   const { data: profilesRaw } = await admin
     .from("profiles")
-    .select("user_id, email, is_admin");
+    .select("user_id, email, is_admin, avatar_url");
   const profiles = (profilesRaw ?? []) as Profile[];
   const activeEmails = new Set(profiles.map((p) => p.email));
   const adminEmails = new Set(profiles.filter((p) => p.is_admin).map((p) => p.email));
+  const avatarByEmail = new Map(profiles.map((p) => [p.email, p.avatar_url]));
   const currentIsAdmin = profiles.some(
     (p) => p.user_id === user?.id && p.is_admin
   );
+  const currentAvatar =
+    profiles.find((p) => p.user_id === user?.id)?.avatar_url ?? null;
 
   return (
     <div className="min-h-screen">
@@ -42,9 +51,9 @@ export default async function TeamPage() {
           <span className="text-zinc-300 dark:text-zinc-700">/</span>
           <h1 className="text-base font-semibold tracking-tight">Team</h1>
         </div>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          {user?.email}
-        </span>
+        {user?.email && (
+          <UserMenu email={user.email} avatarUrl={currentAvatar} />
+        )}
       </header>
 
       <main className="max-w-2xl mx-auto p-6 space-y-8">
@@ -77,12 +86,26 @@ export default async function TeamPage() {
               const active = activeEmails.has(row.email);
               const isYou = row.email === user?.email;
               const isAdmin = adminEmails.has(row.email);
+              const avatar = avatarByEmail.get(row.email) ?? null;
+              const initial = row.email.charAt(0).toUpperCase();
               return (
                 <li
                   key={row.email}
                   className="flex items-center justify-between px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-800"
                 >
                   <div className="flex items-center gap-3">
+                    {avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={avatar}
+                        alt=""
+                        className="w-6 h-6 rounded-full object-cover border border-zinc-200 dark:border-zinc-800"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
+                        {initial}
+                      </div>
+                    )}
                     <span className="text-sm">{row.email}</span>
                     {isYou && (
                       <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">

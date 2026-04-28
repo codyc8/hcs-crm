@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { Board } from "@/components/kanban/board";
 import { createClient } from "@/lib/supabase/server";
-import { SignOutButton } from "@/components/sign-out-button";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { UserMenu } from "@/components/user-menu";
 import type { Business } from "@/lib/types";
 
 const SEED: Business[] = [
@@ -67,6 +67,17 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  let avatarUrl: string | null = null;
+  if (user) {
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("avatar_url")
+      .eq("user_id", user.id)
+      .single();
+    avatarUrl = profile?.avatar_url ?? null;
+  }
+
   return (
     <div className="flex flex-col h-screen">
       <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
@@ -78,26 +89,7 @@ export default async function Home() {
             Davis Web Agency
           </span>
         </div>
-        <div className="flex items-center gap-4 text-xs">
-          <Link
-            href="/team"
-            className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Team
-          </Link>
-          <Link
-            href="/set-password"
-            className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            Password
-          </Link>
-          {user?.email && (
-            <span className="text-zinc-500 dark:text-zinc-500">
-              {user.email}
-            </span>
-          )}
-          <SignOutButton />
-        </div>
+        {user?.email && <UserMenu email={user.email} avatarUrl={avatarUrl} />}
       </header>
       <main className="flex-1 overflow-hidden">
         <Board initialBusinesses={SEED} />
