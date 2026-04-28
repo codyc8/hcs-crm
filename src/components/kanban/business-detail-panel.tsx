@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import {
   COLUMNS,
+  TEMPLATE_CATEGORY_LABELS,
   VERTICAL_LABELS,
   type ActivityEntry,
   type Business,
   type ColumnId,
+  type EmailTemplate,
   type Source,
+  type TemplateCategory,
   type Vertical,
 } from "@/lib/types";
 import {
@@ -16,6 +19,7 @@ import {
   getActivityLog,
   updateBusiness,
 } from "@/app/businesses/actions";
+import { getTemplates } from "@/app/templates/actions";
 
 const VERTICAL_OPTIONS: Vertical[] = [
   "restaurant",
@@ -325,6 +329,8 @@ export function BusinessDetailPanel({
           </div>
         </form>
 
+        <EmailSection business={business} />
+
         <ActivitySection
           loading={loadingLog}
           entries={activities ?? []}
@@ -332,6 +338,176 @@ export function BusinessDetailPanel({
           onAdd={handleAddActivity}
         />
       </div>
+    </div>
+  );
+}
+
+const TEMPLATE_CATEGORY_ORDER: TemplateCategory[] = [
+  "cold",
+  "warm_followup",
+  "followup",
+  "recap",
+  "confirmation",
+  "other",
+];
+
+function mergeTemplate(text: string, business: Business): string {
+  const vars: Record<string, string> = {
+    business_name: business.name,
+    contact_name: business.contact_name ?? "(contact name)",
+    vertical: VERTICAL_LABELS[business.vertical],
+    address: business.address ?? "(address)",
+    phone: business.phone ?? "(phone)",
+  };
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+function EmailSection({ business }: { business: Business }) {
+  const [open, setOpen] = useState(false);
+  const [templates, setTemplates] = useState<EmailTemplate[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<EmailTemplate | null>(null);
+  const [copied, setCopied] = useState<"subject" | "body" | "both" | null>(null);
+
+  useEffect(() => {
+    if (!open || templates !== null) return;
+    setLoading(true);
+    getTemplates().then((r) => {
+      setTemplates(r.templates ?? []);
+      setLoading(false);
+    });
+  }, [open, templates]);
+
+  function copyText(text: string, which: "subject" | "body" | "both") {
+    navigator.clipboard.writeText(text);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  const grouped = templates
+    ? TEMPLATE_CATEGORY_ORDER.reduce<Record<string, EmailTemplate[]>>((acc, cat) => {
+        acc[cat] = templates.filter((t) => t.category === cat);
+        return acc;
+      }, {} as Record<string, EmailTemplate[]>)
+    : {};
+
+  return (
+    <div className="border-t border-zinc-200 dark:border-zinc-800">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
+      >
+        <span>Email templates</span>
+        <span className="text-zinc-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-4 space-y-4">
+          {loading && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Loading templates…</p>
+          )}
+
+          {!loading && templates?.length === 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              No templates yet.{" "}
+              <a href="/templates" className="underline hover:text-zinc-900 dark:hover:text-zinc-100">
+                Create some in Templates.
+              </a>
+            </p>
+          )}
+
+          {!loading && templates && templates.length > 0 && !preview && (
+            <div className="space-y-3">
+              {TEMPLATE_CATEGORY_ORDER.map((cat) => {
+                const group = grouped[cat] ?? [];
+                if (group.length === 0) return null;
+                return (
+                  <div key={cat}>
+                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-1">
+                      {TEMPLATE_CATEGORY_LABELS[cat]}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setPreview(t)}
+                          className="text-xs px-2.5 py-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {preview && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  {preview.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                >
+                  ← Back
+                </button>
+              </div>
+
+              <div className="rounded-md border border-zinc-200 dark:border-zinc-800 overflow-hidden text-sm">
+                <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Subject</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(mergeTemplate(preview.subject, business), "subject")}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {copied === "subject" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <p className="px-3 py-2 text-xs font-medium">
+                  {mergeTemplate(preview.subject, business)}
+                </p>
+              </div>
+
+              <div className="rounded-md border border-zinc-200 dark:border-zinc-800 overflow-hidden text-sm">
+                <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Body</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(mergeTemplate(preview.body, business), "body")}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {copied === "body" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <pre className="px-3 py-2 text-xs whitespace-pre-wrap font-sans">
+                  {mergeTemplate(preview.body, business)}
+                </pre>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  copyText(
+                    `Subject: ${mergeTemplate(preview.subject, business)}\n\n${mergeTemplate(preview.body, business)}`,
+                    "both"
+                  )
+                }
+                className="w-full px-3 py-2 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:opacity-90"
+              >
+                {copied === "both" ? "Copied!" : "Copy subject + body"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

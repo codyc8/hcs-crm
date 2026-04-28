@@ -89,12 +89,37 @@ export type ActivityEntry = {
   created_at: string;
 };
 
+export type TemplateCategory =
+  | "cold"
+  | "warm_followup"
+  | "followup"
+  | "recap"
+  | "confirmation"
+  | "other";
+
+export const TEMPLATE_CATEGORY_LABELS: Record<TemplateCategory, string> = {
+  cold: "Cold Outreach",
+  warm_followup: "Warm In-Person",
+  followup: "Follow-up",
+  recap: "Post-Discovery Recap",
+  confirmation: "Meeting Confirmation",
+  other: "Other",
+};
+
+export const TEMPLATE_VARIABLES = [
+  "{{business_name}}",
+  "{{contact_name}}",
+  "{{vertical}}",
+  "{{address}}",
+  "{{phone}}",
+] as const;
+
 export type EmailTemplate = {
   id: string;
   name: string;
   subject: string;
   body: string;
-  category: "cold" | "followup" | "recap" | "confirmation" | "other";
+  category: TemplateCategory;
   created_at: string;
   updated_at: string;
 };

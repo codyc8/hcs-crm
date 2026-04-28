@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Board } from "@/components/kanban/board";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -45,13 +46,30 @@ export default async function Home() {
   return (
     <div className="flex flex-col h-screen">
       <header className="flex items-center justify-between px-6 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <h1 className="text-base font-semibold tracking-tight">
             HCS Dashboard
           </h1>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Davis Web Agency
-          </span>
+          <nav className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-xs text-zinc-900 dark:text-zinc-100 font-medium"
+            >
+              Board
+            </Link>
+            <Link
+              href="/templates"
+              className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Templates
+            </Link>
+            <Link
+              href="/team"
+              className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Team
+            </Link>
+          </nav>
         </div>
         {user?.email && (
           <UserMenu email={user.email} name={name} avatarUrl={avatarUrl} />

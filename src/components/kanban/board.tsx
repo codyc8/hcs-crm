@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -16,6 +16,7 @@ import { BusinessCard } from "./business-card";
 import { AddBusinessButton } from "./add-business-button";
 import { BusinessDetailPanel } from "./business-detail-panel";
 import { moveBusinessStatus } from "@/app/businesses/actions";
+import { createClient } from "@/lib/supabase/client";
 
 type Member = {
   user_id: string;
@@ -45,6 +46,39 @@ export function Board({ initialBusinesses, members }: Props) {
       activationConstraint: { distance: 6 },
     })
   );
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("businesses-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "businesses" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setBusinesses((prev) => {
+              if (prev.find((b) => b.id === (payload.new as Business).id)) return prev;
+              return [payload.new as Business, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            setBusinesses((prev) =>
+              prev.map((b) =>
+                b.id === (payload.new as Business).id ? (payload.new as Business) : b
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setBusinesses((prev) =>
+              prev.filter((b) => b.id !== (payload.old as { id: string }).id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(String(event.active.id));
