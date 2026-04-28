@@ -31,14 +31,20 @@ export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
     }
     setStatus("saving");
     setError(null);
-    const result = await uploadAvatar(fd);
-    if ("error" in result && result.error) {
-      setError(result.error);
+    try {
+      const result = await uploadAvatar(fd);
+      if ("error" in result && result.error) {
+        setError(result.error);
+        setStatus("error");
+      } else {
+        setPreview(result.url ?? null);
+        setStatus("ok");
+        form.reset();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setError(msg);
       setStatus("error");
-    } else {
-      setPreview(result.url ?? null);
-      setStatus("ok");
-      form.reset();
     }
   }
 
