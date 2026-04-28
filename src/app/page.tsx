@@ -13,6 +13,12 @@ export default async function Home() {
   let avatarUrl: string | null = null;
   let name: string | null = null;
   let businesses: Business[] = [];
+  let members: {
+    user_id: string;
+    name: string | null;
+    email: string;
+    avatar_url: string | null;
+  }[] = [];
 
   if (user) {
     const admin = createAdminClient();
@@ -29,6 +35,11 @@ export default async function Home() {
       .select("*")
       .order("last_activity_at", { ascending: false });
     businesses = (rows ?? []) as Business[];
+
+    const { data: memberRows } = await admin
+      .from("profiles")
+      .select("user_id, name, email, avatar_url");
+    members = memberRows ?? [];
   }
 
   return (
@@ -47,7 +58,7 @@ export default async function Home() {
         )}
       </header>
       <main className="flex-1 overflow-hidden">
-        <Board initialBusinesses={businesses} />
+        <Board initialBusinesses={businesses} members={members} />
       </main>
     </div>
   );

@@ -4,20 +4,37 @@ import { useDroppable } from "@dnd-kit/core";
 import type { Business, ColumnId } from "@/lib/types";
 import { BusinessCard } from "./business-card";
 
+type Member = {
+  user_id: string;
+  name: string | null;
+  email: string;
+  avatar_url: string | null;
+};
+
 type Props = {
   id: ColumnId;
   label: string;
   businesses: Business[];
+  membersById: Map<string, Member>;
+  onOpenBusiness: (id: string) => void;
 };
 
-export function Column({ id, label, businesses }: Props) {
+export function Column({
+  id,
+  label,
+  businesses,
+  membersById,
+  onOpenBusiness,
+}: Props) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
     <div
       ref={setNodeRef}
       className={`flex flex-col w-80 shrink-0 rounded-lg border bg-zinc-50 dark:bg-zinc-900 transition-colors ${
-        isOver ? "border-blue-500 bg-blue-50 dark:bg-blue-950" : "border-zinc-200 dark:border-zinc-800"
+        isOver
+          ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+          : "border-zinc-200 dark:border-zinc-800"
       }`}
     >
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
@@ -34,7 +51,14 @@ export function Column({ id, label, businesses }: Props) {
             Drop here or add a business
           </div>
         ) : (
-          businesses.map((b) => <BusinessCard key={b.id} business={b} />)
+          businesses.map((b) => (
+            <BusinessCard
+              key={b.id}
+              business={b}
+              assignee={b.assigned_to ? membersById.get(b.assigned_to) ?? null : null}
+              onOpen={() => onOpenBusiness(b.id)}
+            />
+          ))
         )}
       </div>
     </div>

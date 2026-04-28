@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -14,16 +14,31 @@ import { COLUMNS, type Business, type ColumnId } from "@/lib/types";
 import { Column } from "./column";
 import { BusinessCard } from "./business-card";
 import { AddBusinessButton } from "./add-business-button";
+import { BusinessDetailPanel } from "./business-detail-panel";
 import { moveBusinessStatus } from "@/app/businesses/actions";
+
+type Member = {
+  user_id: string;
+  name: string | null;
+  email: string;
+  avatar_url: string | null;
+};
 
 type Props = {
   initialBusinesses: Business[];
+  members: Member[];
 };
 
-export function Board({ initialBusinesses }: Props) {
+export function Board({ initialBusinesses, members }: Props) {
   const [businesses, setBusinesses] = useState<Business[]>(initialBusinesses);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  const membersById = useMemo(
+    () => new Map(members.map((m) => [m.user_id, m])),
+    [members]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -61,7 +76,6 @@ export function Board({ initialBusinesses }: Props) {
     startTransition(async () => {
       const result = await moveBusinessStatus(businessId, targetColumn);
       if ("error" in result && result.error) {
-        // Roll back on failure so the UI matches reality.
         setBusinesses((prev) =>
           prev.map((b) =>
             b.id === businessId ? { ...b, status: previousStatus } : b
@@ -75,8 +89,23 @@ export function Board({ initialBusinesses }: Props) {
     setBusinesses((prev) => [business, ...prev]);
   }
 
+  function handleUpdated(business: Business) {
+    setBusinesses((prev) =>
+      prev.map((b) => (b.id === business.id ? business : b))
+    );
+  }
+
+  function handleDeleted(id: string) {
+    setBusinesses((prev) => prev.filter((b) => b.id !== id));
+    setOpenId(null);
+  }
+
   const activeBusiness = activeId
     ? businesses.find((b) => b.id === activeId) ?? null
+    : null;
+
+  const openBusiness = openId
+    ? businesses.find((b) => b.id === openId) ?? null
     : null;
 
   return (
@@ -99,6 +128,8 @@ export function Board({ initialBusinesses }: Props) {
               id={col.id}
               label={col.label}
               businesses={businesses.filter((b) => b.status === col.id)}
+              membersById={membersById}
+              onOpenBusiness={(id) => setOpenId(id)}
             />
           ))}
         </div>
@@ -108,6 +139,16 @@ export function Board({ initialBusinesses }: Props) {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {openBusiness && (
+        <BusinessDetailPanel
+          business={openBusiness}
+          members={members}
+          onClose={() => setOpenId(null)}
+          onUpdated={handleUpdated}
+          onDeleted={handleDeleted}
+        />
+      )}
     </div>
   );
 }
