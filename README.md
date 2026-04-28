@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HCS Dashboard
 
-## Getting Started
+Internal CRM for Davis Web Agency. Drag-and-drop kanban pipeline for cold outreach to clients.
 
-First, run the development server:
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Tailwind v4 · Supabase (Postgres + Auth) · dnd-kit · Vercel
+
+## Local setup
 
 ```bash
+npm install
+cp .env.example .env.local
+# fill in Supabase URL + anon key + service_role key
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Create project at supabase.com (region us-west-1).
+2. In SQL editor, run migrations in order: `supabase/migrations/0001_init.sql`, then `0002_rls.sql`.
+3. Insert allowlisted emails:
+   ```sql
+   insert into public.allowed_emails (email) values
+     ('cody@example.com'),
+     ('cofounder1@example.com'),
+     ('cofounder2@example.com');
+   ```
+4. Auth → Providers → Email → enable magic link, set Site URL to your Vercel URL.
 
-## Learn More
+## Pipeline columns
 
-To learn more about Next.js, take a look at the following resources:
+Cold Outreach → Outreached → Interested → Pitch Meeting Scheduled → Closed Won → Closed Lost.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Roadmap
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **v1** (current): kanban, cards, activity log, manual assignment, visual aging, CSV import, quick-add.
+- **v2**: email template system, Google Calendar integration for pitch meetings.
+- **v3**: realtime sync, per-founder analytics, file attachments, AI scraping.
