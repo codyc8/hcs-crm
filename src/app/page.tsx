@@ -68,14 +68,16 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   let avatarUrl: string | null = null;
+  let name: string | null = null;
   if (user) {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("avatar_url")
+      .select("name, avatar_url")
       .eq("user_id", user.id)
       .single();
     avatarUrl = profile?.avatar_url ?? null;
+    name = profile?.name ?? null;
   }
 
   return (
@@ -89,7 +91,9 @@ export default async function Home() {
             Davis Web Agency
           </span>
         </div>
-        {user?.email && <UserMenu email={user.email} avatarUrl={avatarUrl} />}
+        {user?.email && (
+          <UserMenu email={user.email} name={name} avatarUrl={avatarUrl} />
+        )}
       </header>
       <main className="flex-1 overflow-hidden">
         <Board initialBusinesses={SEED} />

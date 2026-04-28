@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { UserMenu } from "@/components/user-menu";
 import { TeamForm } from "./team-form";
+import { MemberRow } from "./member-row";
 
 type AllowedEmail = { email: string; added_at: string };
 type Profile = {
   user_id: string;
   email: string;
   is_admin: boolean;
+  name: string | null;
   avatar_url: string | null;
 };
 
@@ -27,16 +29,11 @@ export default async function TeamPage() {
 
   const { data: profilesRaw } = await admin
     .from("profiles")
-    .select("user_id, email, is_admin, avatar_url");
+    .select("user_id, email, is_admin, name, avatar_url");
   const profiles = (profilesRaw ?? []) as Profile[];
-  const activeEmails = new Set(profiles.map((p) => p.email));
-  const adminEmails = new Set(profiles.filter((p) => p.is_admin).map((p) => p.email));
-  const avatarByEmail = new Map(profiles.map((p) => [p.email, p.avatar_url]));
-  const currentIsAdmin = profiles.some(
-    (p) => p.user_id === user?.id && p.is_admin
-  );
-  const currentAvatar =
-    profiles.find((p) => p.user_id === user?.id)?.avatar_url ?? null;
+  const profileByEmail = new Map(profiles.map((p) => [p.email, p]));
+  const currentProfile = profiles.find((p) => p.user_id === user?.id);
+  const currentIsAdmin = !!currentProfile?.is_admin;
 
   return (
     <div className="min-h-screen">
@@ -52,7 +49,11 @@ export default async function TeamPage() {
           <h1 className="text-base font-semibold tracking-tight">Team</h1>
         </div>
         {user?.email && (
-          <UserMenu email={user.email} avatarUrl={currentAvatar} />
+          <UserMenu
+            email={user.email}
+            name={currentProfile?.name ?? null}
+            avatarUrl={currentProfile?.avatar_url ?? null}
+          />
         )}
       </header>
 
@@ -76,81 +77,36 @@ export default async function TeamPage() {
 
         <section>
           <h2 className="text-sm font-semibold mb-3">Members</h2>
-          <ul className="space-y-1">
+          {currentIsAdmin && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+              Tap Edit on any active member to change their name or profile picture.
+            </p>
+          )}
+          <ul className="space-y-2">
             {allowed.length === 0 && (
               <li className="text-sm text-zinc-500 dark:text-zinc-400 py-3">
                 No allowlisted emails yet.
               </li>
             )}
             {allowed.map((row) => {
-              const active = activeEmails.has(row.email);
-              const isYou = row.email === user?.email;
-              const isAdmin = adminEmails.has(row.email);
-              const avatar = avatarByEmail.get(row.email) ?? null;
-              const initial = row.email.charAt(0).toUpperCase();
+              const profile = profileByEmail.get(row.email);
               return (
-                <li
+                <MemberRow
                   key={row.email}
-                  className="flex items-center justify-between px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-800"
-                >
-                  <div className="flex items-center gap-3">
-                    {avatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={avatar}
-                        alt=""
-                        className="w-6 h-6 rounded-full object-cover border border-zinc-200 dark:border-zinc-800"
-                      />
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
-                        {initial}
-                      </div>
-                    )}
-                    <span className="text-sm">{row.email}</span>
-                    {isYou && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                        you
-                      </span>
-                    )}
-                    {isAdmin && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
-                        admin
-                      </span>
-                    )}
-                    <span
-                      className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                        active
-                          ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                          : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
-                      }`}
-                    >
-                      {active ? "active" : "invited"}
-                    </span>
-                  </div>
-                  {currentIsAdmin && !isYou && <RemoveButton email={row.email} />}
-                </li>
+                  email={row.email}
+                  targetUserId={profile?.user_id ?? null}
+                  name={profile?.name ?? null}
+                  avatarUrl={profile?.avatar_url ?? null}
+                  isYou={row.email === user?.email}
+                  isAdmin={!!profile?.is_admin}
+                  active={!!profile}
+                  currentIsAdmin={currentIsAdmin}
+                />
               );
             })}
           </ul>
         </section>
       </main>
     </div>
-  );
-}
-
-function RemoveButton({ email }: { email: string }) {
-  return (
-    <form action={async () => {
-      "use server";
-      const { removeMember } = await import("./actions");
-      await removeMember(email);
-    }}>
-      <button
-        type="submit"
-        className="text-xs text-red-600 dark:text-red-400 hover:underline"
-      >
-        Remove
-      </button>
-    </form>
   );
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ProfilePicForm } from "./profile-pic-form";
+import { UserMenu } from "@/components/user-menu";
+import { ProfileForm } from "./profile-form";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -13,7 +14,7 @@ export default async function ProfilePage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles")
-    .select("avatar_url")
+    .select("name, avatar_url")
     .eq("user_id", user.id)
     .single();
 
@@ -30,17 +31,23 @@ export default async function ProfilePage() {
           <span className="text-zinc-300 dark:text-zinc-700">/</span>
           <h1 className="text-base font-semibold tracking-tight">Profile</h1>
         </div>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          {user.email}
-        </span>
+        {user.email && (
+          <UserMenu
+            email={user.email}
+            name={profile?.name ?? null}
+            avatarUrl={profile?.avatar_url ?? null}
+          />
+        )}
       </header>
 
       <main className="max-w-2xl mx-auto p-6 space-y-3">
-        <h2 className="text-sm font-semibold">Profile picture</h2>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Square images look best. Max 5MB.
+          Your display name and profile picture. Square images look best, 5MB max.
         </p>
-        <ProfilePicForm currentUrl={profile?.avatar_url ?? null} />
+        <ProfileForm
+          currentName={profile?.name ?? null}
+          currentAvatarUrl={profile?.avatar_url ?? null}
+        />
       </main>
     </div>
   );

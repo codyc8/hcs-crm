@@ -1,10 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { uploadAvatar } from "../team/actions";
+import { updateMember } from "../team/actions";
 
-export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
-  const [preview, setPreview] = useState<string | null>(currentUrl);
+export function ProfileForm({
+  currentName,
+  currentAvatarUrl,
+}: {
+  currentName: string | null;
+  currentAvatarUrl: string | null;
+}) {
+  const [name, setName] = useState(currentName ?? "");
+  const [preview, setPreview] = useState<string | null>(currentAvatarUrl);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "ok" | "error">(
     "idle"
   );
@@ -14,6 +22,7 @@ export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
   function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      setPickedFile(file);
       setPreview(URL.createObjectURL(file));
       setStatus("idle");
       setError(null);
@@ -22,27 +31,31 @@ export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const file = fd.get("avatar");
-    if (!(file instanceof File) || file.size === 0) {
-      setError("Pick an image first");
+    const fd = new FormData();
+    if (name.trim() !== (currentName ?? "")) {
+      fd.set("name", name.trim());
+    }
+    if (pickedFile) {
+      fd.set("avatar", pickedFile);
+    }
+    if (![...fd.keys()].length) {
+      setError("Nothing changed");
       return;
     }
     setStatus("saving");
     setError(null);
     try {
-      const result = await uploadAvatar(fd);
+      const result = await updateMember(fd);
       if ("error" in result && result.error) {
         setError(result.error);
         setStatus("error");
       } else {
-        setPreview(result.url ?? null);
+        if (result.avatarUrl) setPreview(result.avatarUrl);
         setStatus("ok");
-        form.reset();
+        setPickedFile(null);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
+      const msg = err instanceof Error ? err.message : "Update failed";
       setError(msg);
       setStatus("error");
     }
@@ -66,15 +79,28 @@ export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
           onClick={() => fileRef.current?.click()}
           className="px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
         >
-          Choose image
+          {pickedFile ? "Change image" : "Choose image"}
         </button>
         <input
           ref={fileRef}
           type="file"
-          name="avatar"
           accept="image/*"
           onChange={handlePick}
           className="hidden"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs text-zinc-500 dark:text-zinc-400">
+          Display name
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          placeholder="e.g. Cody"
+          className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -83,13 +109,11 @@ export function ProfilePicForm({ currentUrl }: { currentUrl: string | null }) {
         disabled={status === "saving"}
         className="px-3 py-2 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:opacity-90 disabled:opacity-50"
       >
-        {status === "saving" ? "Uploading..." : "Save"}
+        {status === "saving" ? "Saving..." : "Save"}
       </button>
 
       {status === "ok" && (
-        <p className="text-xs text-emerald-600 dark:text-emerald-400">
-          Saved.
-        </p>
+        <p className="text-xs text-emerald-600 dark:text-emerald-400">Saved.</p>
       )}
       {error && (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>

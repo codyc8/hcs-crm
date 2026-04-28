@@ -78,46 +78,77 @@ export async function removeMember(email: string) {
   return { ok: true };
 }
 
-export async function uploadAvatar(formData: FormData) {
+// Updates a profile's name and/or avatar. Self-target if target_user_id is
+// omitted; otherwise the caller must be admin.
+export async function updateMember(formData: FormData) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const file = formData.get("avatar");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "No file selected" };
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return { error: "Image must be under 5MB" };
-  }
-  if (!file.type.startsWith("image/")) {
-    return { error: "File must be an image" };
+  const targetIdRaw = formData.get("target_user_id");
+  const targetUserId =
+    typeof targetIdRaw === "string" && targetIdRaw.length > 0
+      ? targetIdRaw
+      : user.id;
+
+  if (targetUserId !== user.id) {
+    const { data: caller } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .single();
+    if (!caller?.is_admin) return { error: "Admin only" };
   }
 
-  const ext = (file.name.split(".").pop() || "png").toLowerCase();
-  const path = `${user.id}/avatar.${ext}`;
+  const nameRaw = formData.get("name");
+  const name =
+    typeof nameRaw === "string" ? nameRaw.trim().slice(0, 80) : null;
+
+  const file = formData.get("avatar");
+  const hasFile = file instanceof File && file.size > 0;
+
+  if (name === null && !hasFile) {
+    return { error: "Nothing to update" };
+  }
 
   const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from("avatars")
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (uploadError) return { error: uploadError.message };
+  const updates: { name?: string | null; avatar_url?: string } = {};
 
-  const {
-    data: { publicUrl },
-  } = admin.storage.from("avatars").getPublicUrl(path);
-  const url = `${publicUrl}?v=${Date.now()}`;
+  if (name !== null) {
+    updates.name = name.length > 0 ? name : null;
+  }
+
+  if (hasFile) {
+    if (file.size > 5 * 1024 * 1024) {
+      return { error: "Image must be under 5MB" };
+    }
+    if (!file.type.startsWith("image/")) {
+      return { error: "File must be an image" };
+    }
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const path = `${targetUserId}/avatar.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("avatars")
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (uploadError) return { error: uploadError.message };
+    const {
+      data: { publicUrl },
+    } = admin.storage.from("avatars").getPublicUrl(path);
+    updates.avatar_url = `${publicUrl}?v=${Date.now()}`;
+  }
 
   const { error: updateError } = await admin
     .from("profiles")
-    .update({ avatar_url: url })
-    .eq("user_id", user.id);
+    .update(updates)
+    .eq("user_id", targetUserId);
   if (updateError) return { error: updateError.message };
 
   revalidatePath("/", "layout");
-  return { ok: true, url };
+  revalidatePath("/team");
+  revalidatePath("/profile");
+  return { ok: true, avatarUrl: updates.avatar_url ?? null, name: updates.name ?? null };
 }
 
 export async function setPassword(newPassword: string) {
