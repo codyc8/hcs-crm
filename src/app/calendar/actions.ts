@@ -56,6 +56,22 @@ export async function scheduleMeeting(businessId: string, formData: FormData) {
     .filter((email) => profileByEmail.has(email))
     .map((email) => ({ email, name: profileByEmail.get(email) ?? undefined }));
 
+  // Always include the person who scheduled the meeting
+  const { data: schedulerProfile } = await adminSupabase
+    .from("profiles")
+    .select("email, name")
+    .eq("user_id", user.id)
+    .single();
+
+  const schedulerEmail = schedulerProfile?.email;
+  const alreadyIncluded = teamAttendees.some((a) => a.email === schedulerEmail);
+  if (schedulerEmail && !alreadyIncluded) {
+    teamAttendees.push({
+      email: schedulerEmail,
+      name: schedulerProfile?.name ?? undefined,
+    });
+  }
+
   const clientAttendee = {
     email: business.contact_email,
     name: business.contact_name ?? undefined,
