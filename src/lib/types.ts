@@ -59,6 +59,7 @@ export type Business = {
   contact_name: string | null;
   contact_relationship: string | null;
   contact_phone: string | null;
+  contact_email: string | null;
   source: Source | null;
   status: ColumnId;
   assigned_to: string | null;
@@ -128,8 +129,11 @@ export type CalendarEvent = {
   id: string;
   business_id: string;
   google_event_id: string | null;
+  title: string | null;
   scheduled_at: string;
+  duration_minutes: number;
   attendees: { email: string; name?: string }[];
+  meet_link: string | null;
   created_by: string;
   created_at: string;
 };

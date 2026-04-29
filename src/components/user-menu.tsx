@@ -59,6 +59,12 @@ export function UserMenu({
             Team
           </Link>
           <Link
+            href="/settings/google-calendar"
+            className="block px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            Settings
+          </Link>
+          <Link
             href="/profile"
             className="block px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >

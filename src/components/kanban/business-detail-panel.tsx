@@ -7,6 +7,7 @@ import {
   VERTICAL_LABELS,
   type ActivityEntry,
   type Business,
+  type CalendarEvent,
   type ColumnId,
   type EmailTemplate,
   type Source,
@@ -20,6 +21,7 @@ import {
   updateBusiness,
 } from "@/app/businesses/actions";
 import { getTemplates } from "@/app/templates/actions";
+import { scheduleMeeting, getCalendarEvents } from "@/app/calendar/actions";
 
 const VERTICAL_OPTIONS: Vertical[] = [
   "restaurant",
@@ -296,6 +298,15 @@ export function BusinessDetailPanel({
                 className={inputCls}
               />
             </Field>
+            <Field label="Contact email">
+              <input
+                type="email"
+                name="contact_email"
+                defaultValue={business.contact_email ?? ""}
+                placeholder="owner@business.com"
+                className={inputCls}
+              />
+            </Field>
           </div>
 
           {error && (
@@ -330,6 +341,8 @@ export function BusinessDetailPanel({
         </form>
 
         <EmailSection business={business} />
+
+        <MeetingSection business={business} members={members} />
 
         <ActivitySection
           loading={loadingLog}
@@ -504,6 +517,233 @@ function EmailSection({ business }: { business: Business }) {
               >
                 {copied === "both" ? "Copied!" : "Copy subject + body"}
               </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeetingSection({
+  business,
+  members,
+}: {
+  business: Business;
+  members: Member[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [events, setEvents] = useState<CalendarEvent[] | null>(null);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newMeetLink, setNewMeetLink] = useState<string | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(
+    () => new Set(members.map((m) => m.user_id))
+  );
+
+  useEffect(() => {
+    if (!open || events !== null) return;
+    setLoadingEvents(true);
+    getCalendarEvents(business.id).then((r) => {
+      setEvents(r.events ?? []);
+      setLoadingEvents(false);
+    });
+  }, [open, events, business.id]);
+
+  function toggleMember(userId: string) {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  async function handleSchedule(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setNewMeetLink(null);
+    const fd = new FormData(e.currentTarget);
+
+    // Convert datetime-local value to a full UTC ISO string using local timezone
+    const datetimeLocal = fd.get("datetime") as string;
+    if (datetimeLocal) {
+      fd.set("scheduled_at", new Date(datetimeLocal).toISOString());
+    }
+
+    // Append selected team member emails
+    const selectedEmails = members
+      .filter((m) => selectedMembers.has(m.user_id))
+      .map((m) => m.email);
+    selectedEmails.forEach((email) => fd.append("team_email", email));
+
+    const result = await scheduleMeeting(business.id, fd);
+    if ("error" in result && result.error) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
+    }
+    if (result.event) {
+      setNewMeetLink(result.event.meet_link);
+      setEvents((prev) =>
+        prev
+          ? [result.event as CalendarEvent, ...prev]
+          : [result.event as CalendarEvent]
+      );
+      (e.target as HTMLFormElement).reset();
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="border-t border-zinc-200 dark:border-zinc-800">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
+      >
+        <span>Schedule meeting</span>
+        <span className="text-zinc-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-4 space-y-4">
+          {!business.contact_email && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Add a contact email to this business to send calendar invites.
+            </p>
+          )}
+
+          <form onSubmit={handleSchedule} className="space-y-3">
+            <Field label="Meeting title">
+              <input
+                type="text"
+                name="title"
+                required
+                defaultValue={`HCS Studio Meeting — ${business.name}`}
+                className={inputCls}
+              />
+            </Field>
+
+            <Field label="Date & time">
+              <input
+                type="datetime-local"
+                name="datetime"
+                required
+                min={new Date().toISOString().slice(0, 16)}
+                className={inputCls}
+              />
+            </Field>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Invite team</p>
+              <div className="space-y-1">
+                {business.contact_email && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="w-3.5 h-3.5 rounded-sm border border-zinc-300 dark:border-zinc-600 bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shrink-0">
+                      <span className="text-[9px] leading-none">✓</span>
+                    </span>
+                    <span className="truncate">
+                      {business.contact_name
+                        ? `${business.contact_name} (client)`
+                        : `${business.contact_email} (client)`}
+                    </span>
+                  </div>
+                )}
+                {members.map((m) => (
+                  <label
+                    key={m.user_id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 rounded-sm accent-zinc-900 dark:accent-zinc-100"
+                      checked={selectedMembers.has(m.user_id)}
+                      onChange={() => toggleMember(m.user_id)}
+                    />
+                    <span className="truncate">{m.name || m.email}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <Field label="Duration">
+              <select name="duration_minutes" defaultValue="30" className={inputCls}>
+                <option value="30">30 minutes</option>
+                <option value="45">45 minutes</option>
+                <option value="60">1 hour</option>
+              </select>
+            </Field>
+
+            {error && (
+              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+            )}
+
+            {newMeetLink && (
+              <div className="px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-xs">
+                <p className="text-green-800 dark:text-green-300 font-medium mb-1">
+                  Meeting scheduled! Invites sent.
+                </p>
+                <a
+                  href={newMeetLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 underline break-all"
+                >
+                  {newMeetLink}
+                </a>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting || !business.contact_email}
+              className="w-full px-3 py-2 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? "Scheduling..." : "Schedule & send invites"}
+            </button>
+          </form>
+
+          {loadingEvents && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Loading meetings…</p>
+          )}
+
+          {!loadingEvents && events && events.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-400">
+                Scheduled meetings
+              </p>
+              {events.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{ev.title ?? "Meeting"}</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {new Date(ev.scheduled_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  {ev.meet_link && (
+                    <a
+                      href={ev.meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 underline break-all"
+                    >
+                      Join Meet
+                    </a>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
